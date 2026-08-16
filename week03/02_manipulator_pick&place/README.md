@@ -417,6 +417,9 @@ RViz에서, OPEN -> CLOSE -> OPEN 순서로 움직임.
 
 
 
+
+
+
 ***3. Attach & Detach***
 
 ***4. MTC***
