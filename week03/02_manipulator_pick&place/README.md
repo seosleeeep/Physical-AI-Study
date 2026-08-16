@@ -1289,8 +1289,7 @@ Cartesian Lift
 ```
 
 **로봇 이동 + Gripper 제어 + Planning Scene의 Object 상태 변경**을 연결하여 Pick 동작을 구현하였다!
-
-![execute success](week03/02_manipulator_pick%26place/Screencast%20from%202026-08-16%2022-01-26.gif)
+![execute success](Screencast%20from%202026-08-16%2022-01-26.gif)
 완성본,,,, 아우힘들어
 
 ***4. Attach & Detach***
