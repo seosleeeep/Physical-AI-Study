@@ -87,9 +87,9 @@ ros2 launch moveit_resources_panda_moveit_config demo.launch.py
 | <img width="520" height="490" alt="image" src="https://github.com/user-attachments/assets/113c1336-38fd-4373-96f7-fb13be718c63" /> | <img width="530" height="444" alt="image" src="https://github.com/user-attachments/assets/c0be71a7-c8a9-495a-a741-5e4956591cbd" />
 |
 
-| 유효한 Goal State 설정 | IK solve success |
-| --- | --- |
-| <img width="733" height="492" alt="image" src="https://github.com/user-attachments/assets/c760e8c3-bebe-4ea5-adb4-e6f95ffab968" /> | ![IK solve success](Screencast%20from%202026-08-16%2016-32-43.gif) |
+| 유효한 Goal State 설정 | plan success | execute success |
+| --- | --- | --- |
+| <img width="733" height="492" alt="image" src="https://github.com/user-attachments/assets/c760e8c3-bebe-4ea5-adb4-e6f95ffab968" /> | ![plan success](Screencast%20from%202026-08-16%2016-32-43.gif) | https://github.com/seosleeeep/Physical-AI-Study/blob/main/week03/02_manipulator_pick%26place/Screencast%20from%202026-08-16%2016-52-03.gif |
 
 
 ```
