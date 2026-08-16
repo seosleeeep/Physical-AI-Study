@@ -387,6 +387,7 @@ source ~/ws_moveit/install/setup.bash
  Opening gripper again...
  Finished
 
+![execute success](week03/02_manipulator_pick%26place/Screencast%20from%202026-08-16%2018-41-12.gif)
 
 
 ***3. Attatch***
@@ -1249,9 +1250,9 @@ Lift
 
 
 
-***3. Attach & Detach***
+***4. Attach & Detach***
 
-***4. MTC***
+***5. MTC***
   
 
   
