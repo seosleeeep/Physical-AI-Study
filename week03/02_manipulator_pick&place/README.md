@@ -407,6 +407,7 @@ cd ~/ws_moveit
 colcon build --symlink-install \
   --packages-select panda_pick_place
 //빌드
+```
 
 <img width="626" height="627" alt="image" src="https://github.com/user-attachments/assets/63a2ddbc-432a-4501-b3a9-4e7c8b701190" />
 -> gripper 생성을 완료한 모습.
@@ -414,6 +415,7 @@ colcon build --symlink-install \
 ros2 run panda_pick_place gripper_control 실행하면,
 RViz에서, OPEN -> CLOSE -> OPEN 순서로 움직임.
 
+![execute success](Screencast%20from%202026-08-16%2018-41-12.gif)
 
 
 
