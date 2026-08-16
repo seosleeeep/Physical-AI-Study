@@ -127,6 +127,96 @@ Planning succeeded
 ```
 ---------------------------------------------------------------
 ## Pick&Place
+
+~opening~
+최종 목표는
+(1)접근 → (2)잡기 → (3)attach → (4)lift → (5)이동 → (6)내려놓기 → (7)open + Detach
+과정을 구현하는 것이다. 
+
+이는 MoveIt 관점에서,
+
+Planning Scene에 Object 추가
+        ↓
+Open Gripper
+        ↓
+Object로 이동
+        ↓
+Approach
+        ↓
+Close Gripper
+        ↓
+Attach Object
+        ↓
+Lift
+        ↓
+Place 위치로 이동
+        ↓
+Lower
+        ↓
+Open Gripper
+        ↓
+Detach Object
+        ↓
+Retreat
+
+이다.
+
+**planning Scene**
+: MoveIt이 알고 있는 가상 세계이다.
+MoveIt은 현실을 직접 볼 수 없으므로 로봇 있음, 상자 있음, 테이블 있음 등의 정보를 알려줘야 하는데, 이 정보를 가지고 있는 것이다. Planning Scene에 collision object를 넣어서 로봇이 주변 물체를 고려하도록 한다. (Robot, Object, Obstacle, Attached Object, Collision 정보 가 들어있다.)
+
+**Collision Object**
+: 이름에 써진 collision -> MoveIt이 이 물체와 충돌하면 안 된다는 걸 의미한다.
+
+```
+</> C++
+moveit_msgs::msg::CollisionObject object;
+//'MoveIt 세계에 넣을 물체 하나 만들겠다' 선언
+```
+
+```
+</> C++
+object.id = "pick_box";
+//물체 이름. 
+```
+```
+</> C++
+shape_msgs::msg::SolidPrimitive primitive;
+primitive.type = shape_msgs::msg::SolidPrimitive::BOX;
+//shape를 만드는 부분, 물체의 기하학적 형상을 정의, 상자 생성 (BOX, SPHERE, CYLINDER, CONE 등의 primitive geomery가 있음.)
+```
+```
+</> C++
+primitive.dimensions = {0.05, 0.05, 0.10};
+//dimension을 정의
+```
+```
+</> C++
+geometry_msgs::msg::Pose pose;
+//pose를 정의 (pose는 position+orientation이다. x, y, z, rotation을 가진다.)
+```
+```
+</> C++
+object.primitives.push_back(primitive);
+object.primitive_poses.push_back(pose);
+//Object에 Shape와 Pose를 넣는다. 모양은 primitive, 위치는 pose.
+```
+```
+</> C++
+object.operation =
+    moveit_msgs::msg::CollisionObject::ADD;
+//Planning Scene에 추가. (삭제는 REMOVE)
+
+moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
+//PlanningSceneInterface는 우리 프로그램이 MoveIt Planning Scene과 통신할 수 있게 해주는 인터페이스
+
+planning_scene_interface.applyCollisionObject(object);
+//C++ Node -> PlanningSceneInterface -> move_group / Planning Scene -> pick_box 추가
+```
+
+
+
+
 ***1. 집을 물체를 Planning Scene에 추가하기***
 
 ```
@@ -214,6 +304,118 @@ primitive.dimensions = {0.05, 0.05, 0.10};
 -> 빌드 및 실행 결과 5 cm × 5 cm × 10 cm 박스를 생성했다!
 
 ***2. Gripper 추가하기***
+```
+</> Bash
+nano ~/ws_moveit/src/panda_pick_place/src/gripper_control.cpp
+
+</> C++
+#include <rclcpp/rclcpp.hpp>
+#include <moveit/move_group_interface/move_group_interface.hpp>
+
+#include <chrono>
+#include <thread>
+
+int main(int argc, char** argv)
+{
+  // ROS 2 초기화
+  rclcpp::init(argc, argv);
+
+  // ROS 2 Node 생성
+  auto node = std::make_shared<rclcpp::Node>(
+      "gripper_control",
+      rclcpp::NodeOptions()
+          .automatically_declare_parameters_from_overrides(true));
+
+  // MoveIt MoveGroupInterface 생성
+  // "hand" = Panda gripper planning group
+  moveit::planning_interface::MoveGroupInterface hand(node, "hand");
+
+  RCLCPP_INFO(node->get_logger(), "Opening gripper...");
+
+  // SRDF에 정의되어 있는 named state "open"
+  hand.setNamedTarget("open");
+
+  // 계획 + 실행
+  bool success = static_cast<bool>(hand.move());
+
+  if (!success)
+  {
+    RCLCPP_ERROR(node->get_logger(), "Failed to open gripper");
+    rclcpp::shutdown();
+    return 1;
+  }
+
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+
+  RCLCPP_INFO(node->get_logger(), "Closing gripper...");
+
+  // Panda hand의 닫힌 자세
+  hand.setNamedTarget("close");
+
+  success = static_cast<bool>(hand.move());
+
+  if (!success)
+  {
+    RCLCPP_ERROR(node->get_logger(), "Failed to close gripper");
+    rclcpp::shutdown();
+    return 1;
+  }
+
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+
+  RCLCPP_INFO(node->get_logger(), "Opening gripper again...");
+
+  hand.setNamedTarget("open");
+  hand.move();
+
+  RCLCPP_INFO(node->get_logger(), "Finished");
+
+  rclcpp::shutdown();
+  return 0;
+}
+
+// gripper 제어 코드
+
+</> Bash
+nano ~/ws_moveit/src/panda_pick_place/CMakeLists.txt
+
+</> cmake
+add_executable(gripper_control src/gripper_control.cpp)
+
+ament_target_dependencies(gripper_control
+  rclcpp
+  moveit_ros_planning_interface
+)
+
+//기존 add_object 아래에 추가할 내용.
+
+</> cmake
+install(TARGETS
+  add_object
+  gripper_control
+  DESTINATION lib/${PROJECT_NAME}
+)
+//기존 install()에 추가할 내용.
+```
+```
+</> Bash
+source /opt/ros/jazzy/setup.bash
+source ~/ws_moveit/install/setup.bash
+
+cd ~/ws_moveit
+
+colcon build --symlink-install \
+  --packages-select panda_pick_place
+//빌드
+
+<img width="626" height="627" alt="image" src="https://github.com/user-attachments/assets/63a2ddbc-432a-4501-b3a9-4e7c8b701190" />
+-> gripper 생성을 완료한 모습.
+
+ros2 run panda_pick_place gripper_control 실행하면,
+RViz에서, OPEN -> CLOSE -> OPEN 순서로 움직임.
+
+
+
 
 ***3. Attach & Detach***
 
