@@ -1250,14 +1250,54 @@ Lift
 
 ------------------------------------------------
 이렇게 말고 gripper이 box에 직접 가서 attach, pick 시키자 !!
-https://github.com/seosleeeep/Physical-AI-Study/blob/main/week03/02_manipulator_pick%26place/Screencast%20from%202026-08-16%2022-01-26.gif
-완성본,,,, 아우힘들어
 
+***Pre-Grasp Pose***
+물체를 바로 잡으러 가기 전에, **물체 위쪽의 안전한 준비 위치**로 먼저 이동하는 자세.
+
+***Cartesian Approach***
+
+End Effector가 물체를 향해 **직선에 가깝게 접근**하도록 하는 동작.
+
+`computeCartesianPath()`를 사용하였다.
+
+***Gripper Close***
+물체 위치에 도착한 후 Gripper를 닫음.
+
+`hand` Planning Group의 `close` Named State를 사용하였다.
+
+***Attach Object***
+Gripper를 닫는 것만으로 MoveIt이 물체를 잡았다고 판단하지는 않음.
+따라서 `pick_box`를 `panda_hand`에 Attach하여 **로봇과 함께 움직이는 물체**로 변경한다.
+
+***Lift***
+Attach가 완료되면 Gripper를 위쪽으로 이동시킴.
+이때 Object가 `panda_hand`에 Attach되어 있기 때문에 물체도 같이 올라간다.
+
+***전체 Pick 흐름***
+```text
+Gripper Open
+      ↓
+Pre-Grasp Pose
+      ↓
+Cartesian Approach
+      ↓
+Gripper Close
+      ↓
+Attach Object
+      ↓
+Cartesian Lift
+```
+
+**로봇 이동 + Gripper 제어 + Planning Scene의 Object 상태 변경**을 연결하여 Pick 동작을 구현하였다!
+
+![execute success](week03/02_manipulator_pick%26place/Screencast%20from%202026-08-16%2022-01-26.gif)
+완성본,,,, 아우힘들어
 
 ***4. Attach & Detach***
 
+
 ***5. MTC***
-  
+
 
   
   
