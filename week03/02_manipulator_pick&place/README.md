@@ -74,7 +74,7 @@ ros2 launch moveit_resources_panda_moveit_config demo.launch.py
   planning group : MoveIt이 '어떤 joint 묶음을 같이 움직일 것인가'를 정의한 것.\
    panda_arm 선택 -> Panda의 7개 arm joint를 하나의 그룹으로 움직임.
 
-  *3. End Effector의 Interactive Marker 움직이기*
+  *3. End Effector의 Interactive Marker 움직이기, planning*
   : Goal State를 수정해보기, IK
 
 | 원래 state | IK solve success |
@@ -89,7 +89,7 @@ ros2 launch moveit_resources_panda_moveit_config demo.launch.py
 
 | 유효한 Goal State 설정 | IK solve success |
 | --- | --- |
-| <img width="733" height="492" alt="image" src="https://github.com/user-attachments/assets/c760e8c3-bebe-4ea5-adb4-e6f95ffab968" /> | ![IK solve success](file:///home/rrc/Downloads/Screencast%20from%202026-08-16%2016-32-43.gif) |
+| <img width="733" height="492" alt="image" src="https://github.com/user-attachments/assets/c760e8c3-bebe-4ea5-adb4-e6f95ffab968" /> | ![IK solve success](Screencast%20from%202026-08-16%2016-32-43.gif) |
 
 
 ```
@@ -105,7 +105,15 @@ $ ros2 launch moveit_resources_panda_moveit_config demo.launch.py
 
 //Franka Panda 매니퓰레이터 실행
 ```
+```
+Planning request received
+...
+Planning succeeded
 
+//터미널 로그
+```
+
+  *3. End Effector의 Interactive Marker 움직이기, planning*
 
 
 
