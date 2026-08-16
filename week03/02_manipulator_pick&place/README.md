@@ -304,10 +304,10 @@ primitive.dimensions = {0.05, 0.05, 0.10};
 -> 빌드 및 실행 결과 5 cm × 5 cm × 10 cm 박스를 생성했다!
 
 ***2. Gripper 추가하기***
+1> Gripper 제어 파일 만들기
 ```
 </> Bash
 nano ~/ws_moveit/src/panda_pick_place/src/gripper_control.cpp
-
 </> C++
 #include <rclcpp/rclcpp.hpp>
 #include <moveit/move_group_interface/move_group_interface.hpp>
@@ -374,51 +374,878 @@ int main(int argc, char** argv)
   return 0;
 }
 
-// gripper 제어 코드
+// 
+```
+2> CMakeLists 수정
+3> 빌드
+4> 실행
+source /opt/ros/jazzy/setup.bash
+source ~/ws_moveit/install/setup.bash
 
-</> Bash
-nano ~/ws_moveit/src/panda_pick_place/CMakeLists.txt
+ Opening gripper...
+ Closing gripper...
+ Opening gripper again...
+ Finished
 
-</> cmake
-add_executable(gripper_control src/gripper_control.cpp)
+
+
+***3. Attatch***
+
+1> 목표
+: Planning Scene에 추가한 `pick_box`를 Panda 로봇의 gripper에 연결하여, 로봇이 움직일 때 물체가 함께 움직이도록 구현하자 !
+
+전체 과정은 다음과 같다.
+
+```text
+Collision Object 생성
+        ↓
+Planning Scene에 Object 추가
+        ↓
+Object 위치를 Gripper 근처로 설정
+        ↓
+panda_hand에 Object Attach
+        ↓
+Attached Collision Object로 변경
+        ↓
+Panda가 움직이면 Object도 함께 이동
+```
+
+---
+
+2> Attach 전후 결과 비교
+
+| Object가 Gripper에 제대로 붙지 않은 상태 | Object가 Gripper에 제대로 붙은 상태 |
+| --- | --- |
+| <img width="300" height="315" alt="Attach 전" src="https://github.com/user-attachments/assets/59d944d5-6d29-4eae-bd69-d372e10ba696" /> | <img width="300" height="315" alt="Attach 후" src="https://github.com/user-attachments/assets/0e2d1c5a-d276-49db-8fbf-35261c3570cd" /> |
+| Object가 gripper와 떨어진 위치에서 Attach되어 시각적으로 붙어 있지 않음                                                                                     | Object 위치를 `panda_hand` 근처로 설정한 후 Attach하여 gripper와 함께 보임                                                                             |
+
+### 첫 번째 상태에서 발생한 문제
+
+처음에는 `attachObject()` 자체를 실행했지만, `pick_box`의 위치가 gripper와 멀리 떨어져 있었다.
+
+중요한 점은 **Attach 명령이 물체를 자동으로 gripper 위치로 순간이동시키는 명령은 아니라는 것**이다.
+
+즉,
+
+```text
+Box 위치
+
+□
+
+
+                  Gripper
+                     │
+                     │
+
+attachObject()
+```
+
+를 실행한다고 해서 자동으로
+
+```text
+Gripper
+   │
+   □
+```
+
+가 되는 것은 아니다.
+
+Attach는 현재 Object와 Robot Link 사이의 관계를 Planning Scene에서 변경하는 기능이다.
+
+따라서 물체를 실제로 잡고 있는 것처럼 표현하려면 Attach 전에 Object가 gripper 근처에 위치해야 한다.
+
+---
+
+3> 주요 개념
+
+### ★ Planning Scene
+
+*Planning Scene은 MoveIt이 알고 있는 로봇 주변의 가상 환경이다.
+
+다음과 같은 정보를 포함한다.
+
+```text
+Planning Scene
+│
+├── Robot State
+├── Collision Object
+├── Attached Collision Object
+├── 장애물
+└── Collision 정보
+```
+
+MoveIt은 이 정보를 이용하여 로봇의 경로를 계획하고 충돌을 검사한다.
+
+---
+
+### ★ Collision Object
+
+*Collision Object는 Planning Scene 안에 존재하는 물체 또는 장애물을 의미한다.
+
+이번 실습에서는 다음과 같은 Box를 생성하였다.
+
+```text
+ID   : pick_box
+Shape: BOX
+Size : 0.05 × 0.05 × 0.10 m
+```
+
+즉,
+
+```text
+5 cm × 5 cm × 10 cm
+```
+
+크기의 직육면체이다.
+
+---
+
+### ★ World Object
+
+Attach하기 전의 `pick_box`는 로봇과 독립된 *World Object이다.
+
+```text
+Planning Scene
+
+Panda                  pick_box
+  │                       □
+```
+
+따라서 Panda가 움직여도 Box는 움직이지 않는다.
+
+---
+
+### ★ Attached Collision Object
+
+Object를 Robot Link에 Attach하면 해당 물체는 *Attached Collision Object가 된다.
+
+```text
+Panda
+  │
+panda_hand
+  │
+pick_box
+  □
+```
+
+이제 MoveIt은 `pick_box`를 로봇이 들고 있는 물체로 취급한다.
+
+따라서 Panda가 움직이면 Box도 같이 움직인다.
+
+---
+
+### ★ panda_hand
+
+`panda_hand`는 Panda gripper 부분의 Link이다.
+
+이번 실습에서는 다음과 같이 `pick_box`를 `panda_hand`에 연결하였다.
+
+```cpp
+arm.attachObject("pick_box", "panda_hand");
+```
+
+의미는 다음과 같다.
+
+```text
+pick_box
+    ↓
+panda_hand에 Attach
+    ↓
+Panda와 함께 이동
+```
+
+---
+
+### ★ touch_links
+
+Gripper가 물체를 잡으면 손가락과 물체가 서로 접촉해야 한다.
+
+하지만 MoveIt에서는 기본적으로 Robot과 Collision Object가 접촉하면 충돌로 판단할 수 있다.
+
+따라서 다음 두 finger link와 Object 사이의 접촉을 허용하였다.
+
+```text
+panda_leftfinger
+panda_rightfinger
+```
+
+즉,
+
+```text
+일반 상태
+
+Robot ↔ Object
+Collision 금지
+
+
+Grasp 상태
+
+Finger ↔ Object
+접촉 허용
+```
+
+이 필요하다.
+
+---
+
+4> Panda Hand 위치 확인
+처음에는 Object 위치와 Gripper 위치가 서로 달랐기 때문에 Attach가 시각적으로 이상하게 보였다.
+
+따라서 TF를 이용하여 `panda_hand` 위치를 확인하였다.
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/ws_moveit/install/setup.bash
+
+ros2 run tf2_ros tf2_echo panda_link0 panda_hand
+```
+
+측정 결과:
+
+```text
+Translation:
+x = 0.643
+y = -0.010
+z = 0.605
+```
+
+즉 `panda_link0` 좌표계에서 현재 `panda_hand`의 위치는 다음과 같다.
+
+```text
+panda_hand
+
+x = 0.643 m
+y = -0.010 m
+z = 0.605 m
+```
+
+---
+
+5> Object 위치 수정
+
+`panda_hand`와 완전히 같은 위치에 Box 중심을 생성하면 Object가 손 내부에 겹칠 수 있다.
+
+따라서 Box 높이가 `0.10 m`인 것을 고려하여 중심을 약 5 cm 아래에 배치하였다.
+
+```cpp
+pose.position.x = 0.643;
+pose.position.y = -0.010;
+pose.position.z = 0.555;
+```
+
+관계는 다음과 같다.
+
+```text
+panda_hand
+   ●  z = 0.605
+   │
+   │
+  ┌─┐
+  │ │
+  │□│  pick_box
+  │ │
+  └─┘
+   ●  Box 중심
+      z = 0.555
+```
+
+---
+
+6> Collision Object 생성 코드
+
+파일 위치:
+
+```text
+~/ws_moveit/src/panda_pick_place/src/add_object.cpp
+```
+
+코드:
+
+```cpp
+#include <rclcpp/rclcpp.hpp>
+
+#include <moveit/planning_scene_interface/planning_scene_interface.hpp>
+
+#include <moveit_msgs/msg/collision_object.hpp>
+#include <shape_msgs/msg/solid_primitive.hpp>
+#include <geometry_msgs/msg/pose.hpp>
+
+int main(int argc, char** argv)
+{
+  // ROS 2 초기화
+  rclcpp::init(argc, argv);
+
+  // ROS 2 Node 생성
+  auto node = rclcpp::Node::make_shared("add_collision_object");
+
+  // MoveIt Planning Scene에 접근하기 위한 Interface
+  moveit::planning_interface::PlanningSceneInterface
+      planning_scene_interface;
+
+  // Collision Object 메시지 생성
+  moveit_msgs::msg::CollisionObject object;
+
+  // Object 위치의 기준 좌표계
+  object.header.frame_id = "panda_link0";
+
+  // Object를 구분하기 위한 ID
+  object.id = "pick_box";
+
+  // Object 형상 생성
+  shape_msgs::msg::SolidPrimitive primitive;
+
+  // 직육면체 BOX 사용
+  primitive.type =
+      shape_msgs::msg::SolidPrimitive::BOX;
+
+  // Box 크기
+  // X = 5 cm
+  // Y = 5 cm
+  // Z = 10 cm
+  primitive.dimensions = {
+      0.05,
+      0.05,
+      0.10
+  };
+
+  // Object 위치 및 방향
+  geometry_msgs::msg::Pose pose;
+
+  // Quaternion 기준 회전 없음
+  pose.orientation.w = 1.0;
+
+  // panda_hand 근처에 Object 배치
+  pose.position.x = 0.643;
+  pose.position.y = -0.010;
+  pose.position.z = 0.555;
+
+  // Collision Object에 형상 추가
+  object.primitives.push_back(primitive);
+
+  // Collision Object에 Pose 추가
+  object.primitive_poses.push_back(pose);
+
+  // Planning Scene에서 수행할 동작
+  // ADD = Object 추가
+  object.operation =
+      moveit_msgs::msg::CollisionObject::ADD;
+
+  // Object를 실제 Planning Scene에 적용
+  planning_scene_interface.applyCollisionObject(object);
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "Added pick_box to Planning Scene"
+  );
+
+  rclcpp::shutdown();
+
+  return 0;
+}
+```
+
+---
+
+# 7. `operation = ADD`와 `applyCollisionObject()` 차이
+
+두 부분은 서로 역할이 다르다.
+
+```cpp
+object.operation =
+    moveit_msgs::msg::CollisionObject::ADD;
+```
+
+이 부분은:
+
+```text
+이 CollisionObject에 대해
+어떤 작업을 할 것인가?
+        ↓
+ADD
+```
+
+라고 **작업 종류를 지정**하는 것이다.
+
+아직 Planning Scene에 전달된 것은 아니다.
+
+반면,
+
+```cpp
+planning_scene_interface.applyCollisionObject(object);
+```
+
+는 완성된 Collision Object 메시지를 **실제로 Planning Scene에 적용**한다.
+
+따라서 전체 과정은:
+
+```text
+CollisionObject 생성
+       ↓
+ID 지정
+       ↓
+Shape 지정
+       ↓
+Pose 지정
+       ↓
+operation = ADD
+       ↓
+"추가 작업"이라고 표시
+       ↓
+applyCollisionObject()
+       ↓
+Planning Scene에 실제 추가
+```
+
+이다.
+
+---
+
+# 8. Attach Object 코드
+
+파일 위치:
+
+```text
+~/ws_moveit/src/panda_pick_place/src/attach_object.cpp
+```
+
+코드:
+
+```cpp
+#include <rclcpp/rclcpp.hpp>
+
+#include <moveit/move_group_interface/move_group_interface.hpp>
+
+#include <chrono>
+#include <thread>
+#include <vector>
+#include <string>
+
+int main(int argc, char** argv)
+{
+  // ROS 2 초기화
+  rclcpp::init(argc, argv);
+
+  // ROS 2 Node 생성
+  auto node = std::make_shared<rclcpp::Node>(
+      "attach_object",
+      rclcpp::NodeOptions()
+          .automatically_declare_parameters_from_overrides(true)
+  );
+
+  // Panda Arm의 MoveGroupInterface 생성
+  moveit::planning_interface::MoveGroupInterface
+      arm(node, "panda_arm");
+
+  // Object와 접촉을 허용할 Link 목록
+  std::vector<std::string> touch_links;
+
+  // Panda gripper의 왼쪽 finger
+  touch_links.push_back("panda_leftfinger");
+
+  // Panda gripper의 오른쪽 finger
+  touch_links.push_back("panda_rightfinger");
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "Attaching pick_box to panda_hand..."
+  );
+
+  // pick_box를 panda_hand에 Attach
+  bool success = arm.attachObject(
+      "pick_box",
+      "panda_hand",
+      touch_links
+  );
+
+  // 결과 확인
+  if (success)
+  {
+    RCLCPP_INFO(
+        node->get_logger(),
+        "Attach request succeeded."
+    );
+  }
+  else
+  {
+    RCLCPP_ERROR(
+        node->get_logger(),
+        "Attach request failed."
+    );
+  }
+
+  // Planning Scene 반영을 확인하기 위해 잠시 대기
+  std::this_thread::sleep_for(
+      std::chrono::seconds(3)
+  );
+
+  // ROS 2 종료
+  rclcpp::shutdown();
+
+  return 0;
+}
+```
+
+---
+
+# 9. Attach 코드의 핵심
+
+가장 중요한 부분은 다음 코드이다.
+
+```cpp
+arm.attachObject(
+    "pick_box",
+    "panda_hand",
+    touch_links
+);
+```
+
+각 인자의 의미는:
+
+```text
+"pick_box"
+    ↓
+Attach할 Object ID
+
+"panda_hand"
+    ↓
+Object를 연결할 Robot Link
+
+touch_links
+    ↓
+Object와 접촉해도 되는 Link 목록
+```
+
+이다.
+
+전체 관계는:
+
+```text
+Planning Scene
+
+pick_box
+   │
+   │ attachObject()
+   ▼
+panda_hand
+   │
+   ├── panda_leftfinger
+   └── panda_rightfinger
+```
+
+가 된다.
+
+---
+
+# 10. CMakeLists.txt
+
+이번 실습에서 사용한 실행 파일은:
+
+```text
+add_object
+gripper_control
+attach_object
+```
+
+이다.
+
+따라서 `CMakeLists.txt`에는 각 C++ 파일을 executable로 등록해야 한다.
+
+```cmake
+add_executable(add_object
+  src/add_object.cpp
+)
+
+ament_target_dependencies(add_object
+  rclcpp
+  moveit_ros_planning_interface
+  moveit_msgs
+  shape_msgs
+  geometry_msgs
+)
+
+
+add_executable(gripper_control
+  src/gripper_control.cpp
+)
 
 ament_target_dependencies(gripper_control
   rclcpp
   moveit_ros_planning_interface
 )
 
-//기존 add_object 아래에 추가할 내용.
 
-</> cmake
+add_executable(attach_object
+  src/attach_object.cpp
+)
+
+ament_target_dependencies(attach_object
+  rclcpp
+  moveit_ros_planning_interface
+)
+
+
 install(TARGETS
   add_object
   gripper_control
+  attach_object
   DESTINATION lib/${PROJECT_NAME}
 )
-//기존 install()에 추가할 내용.
 ```
+
+### ★ add_executable()
+
+```cmake
+add_executable(
+  attach_object
+  src/attach_object.cpp
+)
 ```
-</> Bash
+
+C++ 소스 파일을 ROS 2에서 실행할 수 있는 executable target으로 만든다.
+
+### ★ ament_target_dependencies()
+
+```cmake
+ament_target_dependencies(
+  attach_object
+  rclcpp
+  moveit_ros_planning_interface
+)
+```
+
+해당 executable이 사용하는 ROS 2 / MoveIt 라이브러리를 연결한다.
+
+### ★ install(TARGETS)
+
+```cmake
+install(TARGETS
+  attach_object
+  DESTINATION lib/${PROJECT_NAME}
+)
+```
+
+빌드된 실행 파일을 ROS 2에서:
+
+```bash
+ros2 run panda_pick_place attach_object
+```
+
+형태로 실행할 수 있도록 설치한다.
+
+---
+
+# 11. 빌드
+
+코드를 수정한 뒤:
+
+```bash
+cd ~/ws_moveit
+
+colcon build \
+  --symlink-install \
+  --packages-select panda_pick_place
+```
+
+빌드 완료 후 반드시 workspace를 다시 source한다.
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/ws_moveit/install/setup.bash
+```
+
+---
+
+# 12. 실행 순서
+
+## Terminal 1 - Panda MoveIt 실행
+
+```bash
 source /opt/ros/jazzy/setup.bash
 source ~/ws_moveit/install/setup.bash
 
-cd ~/ws_moveit
-
-colcon build --symlink-install \
-  --packages-select panda_pick_place
-//빌드
+ros2 launch moveit_resources_panda_moveit_config demo.launch.py
 ```
 
-<img width="626" height="627" alt="image" src="https://github.com/user-attachments/assets/63a2ddbc-432a-4501-b3a9-4e7c8b701190" />
--> gripper 생성을 완료한 모습.
+RViz와 Panda Robot을 실행한다.
 
-ros2 run panda_pick_place gripper_control 실행하면,
-RViz에서, OPEN -> CLOSE -> OPEN 순서로 움직임.
+---
 
-![execute success](Screencast%20from%202026-08-16%2018-41-12.gif)
+## Terminal 2 - Object 추가
 
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/ws_moveit/install/setup.bash
 
+ros2 run panda_pick_place add_object
+```
 
+이 명령을 실행하면 `pick_box`가 Planning Scene에 추가된다.
+
+---
+
+## Terminal 2 - Object Attach
+
+```bash
+ros2 run panda_pick_place attach_object
+```
+
+정상적으로 실행되면:
+
+```text
+Attaching pick_box to panda_hand...
+Attach request succeeded.
+```
+
+와 같은 로그를 확인할 수 있다.
+
+---
+
+# 13. Attach 전후 Planning Scene 변화
+
+### Attach 전
+
+```text
+Planning Scene
+
+Robot                    World Object
+
+Panda                       □
+                            │
+                         pick_box
+```
+
+이때 Box는 Robot과 독립적이다.
+
+Panda가 움직여도 Box는 움직이지 않는다.
+
+---
+
+### Attach 후
+
+```text
+Planning Scene
+
+Panda
+  │
+panda_hand
+  │
+  □
+pick_box
+```
+
+이제 `pick_box`는 Robot에 연결된 *Attached Collision Object이다.
+
+Panda가 움직이면 Box도 함께 움직인다.
+
+---
+
+# 14. 이번 실습에서 중요한 점
+
+### ★ Attach는 물체를 순간이동시키는 기능이 아니다.
+
+처음 실습에서 Box가 바닥에 있는 상태로:
+
+```cpp
+attachObject()
+```
+
+를 실행했지만 Box가 gripper 위치로 이동하지 않았다.
+
+Attach는:
+
+```text
+Object 위치 변경
+```
+
+기능이 아니라,
+
+```text
+Object의 소속 변경
+```
+
+기능이기 때문이다.
+
+즉:
+
+```text
+World Object
+
+      ↓ Attach
+
+Robot Attached Object
+```
+
+로 변경하는 것이다.
+
+---
+
+### ★ 실제 Pick에서는 Attach 전에 접근 과정이 필요하다.
+
+이번 실습에서는 Attach 기능 자체를 확인하기 위해 Box를 미리 gripper 근처에 생성했다.
+
+하지만 실제 Pick 과정에서는 다음 순서가 필요하다.
+
+```text
+Object가 바닥에 존재
+        ↓
+Gripper Open
+        ↓
+Panda가 Object 근처로 이동
+        ↓
+Approach
+        ↓
+Gripper Close
+        ↓
+Attach Object
+        ↓
+Lift
+```
+
+따라서 이번 Attach 실습은 **Pick & Place 전체 과정 중 Attach 기능을 독립적으로 확인하기 위한 실습**이다.
+
+---
+
+# 15. 현재까지 구현한 기능
+
+```text
+Ubuntu 24.04
+    ↓
+ROS 2 Jazzy
+    ↓
+MoveIt 2
+    ↓
+Panda Manipulator 실행
+    ↓
+RViz Motion Planning
+    ↓
+Collision Object 생성 ✅
+    ↓
+Planning Scene에 Box 추가 ✅
+    ↓
+Gripper Open / Close ✅
+    ↓
+Object 위치 조정 ✅
+    ↓
+Object Attach ✅
+```
+
+다음 단계에서는 이 기능들을 연결하여:
+
+```text
+Gripper Open
+    ↓
+Object로 이동
+    ↓
+Approach
+    ↓
+Gripper Close
+    ↓
+Attach
+    ↓
+Lift
+```
+
+순서의 **실제 Pick 동작**을 구현한다.
 
 
 
