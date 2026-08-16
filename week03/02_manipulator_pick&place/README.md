@@ -1248,6 +1248,10 @@ Lift
 
 순서의 **실제 Pick 동작**을 구현한다.
 
+------------------------------------------------
+이렇게 말고 gripper이 box에 직접 가서 attach, pick 시키자 !!
+https://github.com/seosleeeep/Physical-AI-Study/blob/main/week03/02_manipulator_pick%26place/Screencast%20from%202026-08-16%2022-01-26.gif
+완성본,,,, 아우힘들어
 
 
 ***4. Attach & Detach***
