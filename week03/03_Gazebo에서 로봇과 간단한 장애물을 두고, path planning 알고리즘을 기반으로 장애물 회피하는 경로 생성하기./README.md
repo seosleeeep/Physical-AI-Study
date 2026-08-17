@@ -34,36 +34,36 @@ Planner가 생성한 전체 이동 경로
 Nav2에서 사용 가능한 A* 기반 Planner
 
 ------------------------------------------------------------------
-## pipeline     
-STEP 1  간단한 Differential Drive 로봇 생성
-        └─ base_link + 좌/우 wheel 구조 만들기
-        ↓
-STEP 2  Gazebo에서 로봇 띄우기
-        └─ URDF/Xacro → Gazebo spawn 확인
-        ↓
-STEP 3  바퀴 구동 + /cmd_vel
-        └─ linear.x / angular.z 명령으로 실제 이동 확인
-        ↓
-STEP 4  Odometry / TF 구성
-        └─ odom → base_link 위치 관계 확인
-        ↓
-STEP 5  LiDAR 추가
-        └─ /scan으로 장애물 거리 측정
-        ↓
-STEP 6  Gazebo 장애물 추가
-        └─ Box 등을 world에 배치
-        ↓
-STEP 7  Nav2 연결
-        └─ Planner / Controller / Costmap 구성
-        ↓
-STEP 8  RViz에서 Goal 지정
-        └─ 목표 위치와 방향 지정
-        ↓
-STEP 9  장애물을 피하는 Global Path 생성
-        └─ Costmap 기반 충돌 없는 경로 계산
-        ↓
-STEP 10 실제 로봇이 경로 따라 이동
-        └─ Controller → /cmd_vel → Differential Drive  
+## pipeline       
+STEP 1  간단한 Differential Drive 로봇 생성    
+        └─ base_link + 좌/우 wheel 구조 만들기    
+        ↓            
+STEP 2  Gazebo에서 로봇 띄우기             
+        └─ URDF/Xacro → Gazebo spawn 확인            
+        ↓                       
+STEP 3  바퀴 구동 + /cmd_vel            
+        └─ linear.x / angular.z 명령으로 실제 이동 확인            
+        ↓            
+STEP 4  Odometry / TF 구성            
+        └─ odom → base_link 위치 관계 확인            
+        ↓            
+STEP 5  LiDAR 추가            
+        └─ /scan으로 장애물 거리 측정            
+        ↓            
+STEP 6  Gazebo 장애물 추가            
+        └─ Box 등을 world에 배치            
+        ↓            
+STEP 7  Nav2 연결            
+        └─ Planner / Controller / Costmap 구성            
+        ↓            
+STEP 8  RViz에서 Goal 지정            
+        └─ 목표 위치와 방향 지정            
+        ↓            
+STEP 9  장애물을 피하는 Global Path 생성            
+        └─ Costmap 기반 충돌 없는 경로 계산            
+        ↓            
+STEP 10 실제 로봇이 경로 따라 이동            
+        └─ Controller → /cmd_vel → Differential Drive              
 ------------------------------------------------------------------
 ## step1> 간단한 Differential Drive 로봇 생성
 
