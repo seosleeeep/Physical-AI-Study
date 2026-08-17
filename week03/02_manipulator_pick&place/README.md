@@ -2034,14 +2034,161 @@ arm.setNumPlanningAttempts(20);
 
 으로 올려서 Planning attempt 수를 늘림. lanner를 여러 번 새로 계산하도록 설정함.
 
+| ![Pick and Place Success](pick_and_place_success.gif) |
+| --- |
+| pick and place 를 실행 성공한 모습 |
+
+---------------------------------------------------------------------------------
+
+추가 설명
+
+### Box 크기
+```
+</> C++
+
+shape_msgs::msg::SolidPrimitive primitive;
+
+primitive.type =
+    shape_msgs::msg::SolidPrimitive::BOX;
+
+primitive.dimensions = {
+    0.05,
+    0.05,
+    0.10
+};
+```
+```
+{x 크기, y 크기, z 크기}
+```
+### Box 초기 생성 위치
+```
+</> C++
+object_pose.position.x = 0.45;
+object_pose.position.y = 0.00;
+object_pose.position.z = 0.05;
+```
+```
+//panda_link0 기준
+
+x = 0.45 m
+y = 0.00 m
+z = 0.05 m
+
+위치에 box 중심을 생성함.
+````
+### Pre-Grasp 위치
+: Panda gripper가 먼저 이동할 위치
+```
+</> C++
+target_pose.position.x = 0.45;
+target_pose.position.y = 0.00;
+target_pose.position.z = 0.30;
+```
+```
+//Box와 x/y를 같게 하고 z만 높게 설정해서 물체 바로 위로 이동시키는 것.
+Box 위치를 바꾸면 Pre-grasp도 변경해야 한다!
+Box X/Y = Pre-Grasp X/Y
+```
+### Orientation
+```
+</> C++
+target_pose.orientation.x = 1.0;
+target_pose.orientation.y = 0.0;
+target_pose.orientation.z = 0.0;
+target_pose.orientation.w = 0.0;
+
+// end-effector의 방향을 지정하는 quaternion
+```
+### 목표 전달
+```
+</> C++
+arm.setPoseTarget(target_pose);
+
+//target_pose가 MoveIt의 panda_arm 목표 pose으로 전달된다.
+```
+```
+</> C++
+arm.move();
+
+//
+ 현재 Panda 자세   
+       ↓   
+ target_pose   
+       ↓   
+ Motion Planning   
+       ↓   
+ Trajectory   
+       ↓   
+ Execute   
+```
+### Pick&Place의 주요 조정 파라미터 정리
+```
+// =============================
+// 물체 크기
+// =============================
+primitive.dimensions = {
+    0.05,
+    0.05,
+    0.10
+};
 
 
+// =============================
+// 물체 시작 위치
+// =============================
+object_pose.position.x = 0.45;
+object_pose.position.y = 0.00;
+object_pose.position.z = 0.05;
 
 
+// =============================
+// 물체 위 Pre-Grasp 위치
+// =============================
+target_pose.position.x = 0.45;
+target_pose.position.y = 0.00;
+target_pose.position.z = 0.30;
 
 
+// =============================
+// 접근 거리
+// =============================
+approach_pose.position.z -= 0.08;
 
 
+// =============================
+// Lift 거리
+// =============================
+lift_pose.position.z += 0.12;
+
+
+// =============================
+// Place 위치
+// =============================
+place_pose.position.x = 0.35;
+place_pose.position.y = 0.30;
+place_pose.position.z = 0.30;
+
+
+// =============================
+// 내려놓기 거리
+// =============================
+lower_pose.position.z -= 0.10;
+
+
+// =============================
+// Detach 후 후퇴
+// =============================
+retreat_pose.position.z += 0.10;
+
+
+// =============================
+// 속도
+// =============================
+arm.setMaxVelocityScalingFactor(0.2);
+arm.setMaxAccelerationScalingFactor(0.2);
+```
+
+---------------------------------------------------------------------------------
 ***5. MTC***
 
 
