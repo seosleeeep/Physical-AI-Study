@@ -1,5 +1,13 @@
 # 매니퓰레이터를 불러와서 Moveit or Moveit2 (for ROS2) tutorial 을 따라하면서, pick and place 구현하기
 
+```
+MoveIt2 튜토리얼
+
+Pick&Place
+
+구현해보기
+```
+
 ## MoveIt2 튜토리얼
  : ROS 2용 로봇 Manipulation / Motion Planning Framework  
  motion planning, kinematics, collision checking 등을 제공  
@@ -128,7 +136,7 @@ Planning succeeded
 ---------------------------------------------------------------
 ## Pick&Place
 
-~opening~
+opening~
 최종 목표는
 (1)접근 → (2)잡기 → (3)attach → (4)lift → (5)이동 → (6)내려놓기 → (7)open + Detach
 과정을 구현하는 것이다. 
@@ -215,7 +223,8 @@ planning_scene_interface.applyCollisionObject(object);
 ```
 
 
-
+-------------------------------------------------------------------------------------------------------------
+## 구현해보기
 
 ***1. 집을 물체를 Planning Scene에 추가하기***
 
@@ -1293,6 +1302,744 @@ Cartesian Lift
 완성본,,,, 아우힘들어
 
 ***4. Attach & Detach***
+0> setting
+```
+</> Bash
+source /opt/ros/jazzy/setup.bash
+source ~/ws_moveit/install/setup.bash
+
+ros2 launch moveit_resources_panda_moveit_config demo.launch.py
+// Panda + RViz 다시 실행
+</> Bash
+source /opt/ros/jazzy/setup.bash
+source ~/ws_moveit/install/setup.bash
+//실행 파일 확인
+//실행결과
+rrc@rrc-15Z90R-GA5UK:~$ ros2 pkg executables panda_pick_place
+panda_pick_place add_object
+panda_pick_place attach_object
+panda_pick_place gripper_control
+panda_pick_place pick_object
+//
+```
+
+1> attetch 뒤에 detach 연결하기
+Detach = 다시 독립적인 Planning Scene 물체로 변경
+```
+</> Bash
+nano ~/ws_moveit/src/panda_pick_place/src/detach_object.cpp
+//detach_object.cpp 만들기
+
+</>C++
+#include <rclcpp/rclcpp.hpp>
+#include <moveit/move_group_interface/move_group_interface.hpp>
+
+#include <chrono>
+#include <thread>
+
+int main(int argc, char** argv)
+{
+  rclcpp::init(argc, argv);
+
+  auto node = std::make_shared<rclcpp::Node>(
+      "detach_object",
+      rclcpp::NodeOptions()
+          .automatically_declare_parameters_from_overrides(true));
+
+  moveit::planning_interface::MoveGroupInterface arm(
+      node,
+      "panda_arm");
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "Detaching pick_box...");
+
+  bool success = arm.detachObject("pick_box");
+
+  if (success)
+  {
+    RCLCPP_INFO(
+        node->get_logger(),
+        "pick_box detached successfully");
+  }
+  else
+  {
+    RCLCPP_ERROR(
+        node->get_logger(),
+        "Failed to detach pick_box");
+  }
+
+  std::this_thread::sleep_for(
+      std::chrono::seconds(2));
+
+  rclcpp::shutdown();
+
+  return 0;
+}
+//detach_object.cpp에 넣은 코드
+</> Bash
+nano ~/ws_moveit/src/panda_pick_place/CMakeLists.txt
+
+</> C++
+add_executable(
+  detach_object
+  src/detach_object.cpp
+)
+
+ament_target_dependencies(
+  detach_object
+  rclcpp
+  moveit_ros_planning_interface
+)
+//CMaker 수정 코드 (기존 executable에 추가)
+
+</> C++
+install(
+  TARGETS
+
+  add_object
+  gripper_control
+  attach_object
+  detach_object
+  pick_object
+
+  DESTINATION lib/${PROJECT_NAME}
+)
+//CMaker 수정 코드 (install() 안에 추가)
+
+</> Bash
+cd ~/ws_moveit
+
+colcon build \
+  --symlink-install \
+  --packages-select panda_pick_place
+
+source ~/ws_moveit/install/setup.bash
+//빌드
+// ros2 pkg executables panda_pick_place 했을 때 panda_pick_place detach_object 보이는지 확인
+```
+```
+
+<img width="386" height="244" alt="image" src="https://github.com/user-attachments/assets/68526b87-04e7-45ac-a26f-3b51f2316d06" /> 
+ ㄴ CMaker 수정 코드.
+
+<img width="745" height="135" alt="image" src="https://github.com/user-attachments/assets/137ef47e-aa27-49b9-af68-a2f6920069b4" />   
+ ㄴ 빌드 성공.
+```
+```
+nano ~/ws_moveit/src/panda_pick_place/src/pick_and_place.cpp
+//pick&place cpp 만들기
+
+들어간 전체 코드
+: 
+
+#include <rclcpp/rclcpp.hpp>
+
+#include <moveit/move_group_interface/move_group_interface.hpp>
+#include <moveit/planning_scene_interface/planning_scene_interface.hpp>
+
+#include <moveit_msgs/msg/collision_object.hpp>
+#include <moveit_msgs/msg/robot_trajectory.hpp>
+
+#include <shape_msgs/msg/solid_primitive.hpp>
+#include <geometry_msgs/msg/pose.hpp>
+
+#include <chrono>
+#include <thread>
+#include <vector>
+#include <string>
+
+int main(int argc, char** argv)
+{
+  rclcpp::init(argc, argv);
+
+  auto node = std::make_shared<rclcpp::Node>(
+      "pick_and_place",
+      rclcpp::NodeOptions()
+          .automatically_declare_parameters_from_overrides(true));
+
+  // ROS callback 처리
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(node);
+
+  std::thread executor_thread([&executor]()
+  {
+    executor.spin();
+  });
+
+
+  // ============================================================
+  // MoveIt Interfaces
+  // ============================================================
+
+  moveit::planning_interface::MoveGroupInterface arm(
+      node,
+      "panda_arm");
+
+  moveit::planning_interface::MoveGroupInterface hand(
+      node,
+      "hand");
+
+  moveit::planning_interface::PlanningSceneInterface
+      planning_scene_interface;
+
+
+  arm.setPlanningTime(10.0);
+  arm.setNumPlanningAttempts(10);
+
+  arm.setMaxVelocityScalingFactor(0.2);
+  arm.setMaxAccelerationScalingFactor(0.2);
+
+
+  // ============================================================
+  // STEP 0 : 기존 Object 제거
+  // ============================================================
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "STEP 0 : Removing old object");
+
+  planning_scene_interface.removeCollisionObjects(
+      {"pick_box"});
+
+  std::this_thread::sleep_for(
+      std::chrono::seconds(1));
+
+
+  // ============================================================
+  // STEP 1 : Box 생성
+  // ============================================================
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "STEP 1 : Adding pick_box");
+
+
+  moveit_msgs::msg::CollisionObject object;
+
+  object.header.frame_id = "panda_link0";
+  object.id = "pick_box";
+
+
+  shape_msgs::msg::SolidPrimitive primitive;
+
+  primitive.type =
+      shape_msgs::msg::SolidPrimitive::BOX;
+
+  primitive.dimensions = {
+      0.05,
+      0.05,
+      0.10
+  };
+
+
+  geometry_msgs::msg::Pose object_pose;
+
+  object_pose.orientation.w = 1.0;
+
+  object_pose.position.x = 0.45;
+  object_pose.position.y = 0.00;
+  object_pose.position.z = 0.05;
+
+
+  object.primitives.push_back(primitive);
+
+  object.primitive_poses.push_back(object_pose);
+
+  object.operation =
+      moveit_msgs::msg::CollisionObject::ADD;
+
+
+  planning_scene_interface.applyCollisionObject(object);
+
+
+  std::this_thread::sleep_for(
+      std::chrono::seconds(1));
+
+
+  // ============================================================
+  // STEP 2 : Gripper Open
+  // ============================================================
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "STEP 2 : Opening gripper");
+
+
+  hand.setNamedTarget("open");
+
+
+  if (!static_cast<bool>(hand.move()))
+  {
+    RCLCPP_ERROR(
+        node->get_logger(),
+        "Failed to open gripper");
+
+    executor.cancel();
+    executor_thread.join();
+    rclcpp::shutdown();
+
+    return 1;
+  }
+
+
+  // ============================================================
+  // STEP 3 : Pre-Grasp
+  // ============================================================
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "STEP 3 : Moving to pre-grasp");
+
+
+  geometry_msgs::msg::Pose target_pose;
+
+
+  // Gripper 아래 방향
+  target_pose.orientation.x = 1.0;
+  target_pose.orientation.y = 0.0;
+  target_pose.orientation.z = 0.0;
+  target_pose.orientation.w = 0.0;
+
+
+  target_pose.position.x = 0.45;
+  target_pose.position.y = 0.00;
+  target_pose.position.z = 0.30;
+
+
+  arm.setPoseTarget(target_pose);
+
+
+  if (!static_cast<bool>(arm.move()))
+  {
+    RCLCPP_ERROR(
+        node->get_logger(),
+        "Pre-grasp failed");
+
+    executor.cancel();
+    executor_thread.join();
+    rclcpp::shutdown();
+
+    return 1;
+  }
+
+
+  arm.clearPoseTargets();
+
+
+  // ============================================================
+  // STEP 4 : Cartesian Approach
+  // ============================================================
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "STEP 4 : Approaching object");
+
+
+  geometry_msgs::msg::Pose approach_pose =
+      arm.getCurrentPose().pose;
+
+
+  // 아래로 8 cm
+  approach_pose.position.z -= 0.08;
+
+
+  std::vector<geometry_msgs::msg::Pose> waypoints;
+
+  waypoints.push_back(approach_pose);
+
+
+  moveit_msgs::msg::RobotTrajectory trajectory;
+
+
+  double fraction =
+      arm.computeCartesianPath(
+          waypoints,
+          0.01,
+          trajectory,
+          true);
+
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "Approach path: %.1f%%",
+      fraction * 100.0);
+
+
+  if (fraction < 0.95)
+  {
+    RCLCPP_ERROR(
+        node->get_logger(),
+        "Approach failed");
+
+    executor.cancel();
+    executor_thread.join();
+    rclcpp::shutdown();
+
+    return 1;
+  }
+
+
+  if (!static_cast<bool>(
+      arm.execute(trajectory)))
+  {
+    RCLCPP_ERROR(
+        node->get_logger(),
+        "Approach execution failed");
+
+    executor.cancel();
+    executor_thread.join();
+    rclcpp::shutdown();
+
+    return 1;
+  }
+
+
+  // ============================================================
+  // STEP 5 : Gripper Close
+  // ============================================================
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "STEP 5 : Closing gripper");
+
+
+  hand.setNamedTarget("close");
+
+
+  if (!static_cast<bool>(hand.move()))
+  {
+    RCLCPP_ERROR(
+        node->get_logger(),
+        "Close failed");
+
+    executor.cancel();
+    executor_thread.join();
+    rclcpp::shutdown();
+
+    return 1;
+  }
+
+
+  // ============================================================
+  // STEP 6 : Attach
+  // ============================================================
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "STEP 6 : Attaching object");
+
+
+  std::vector<std::string> touch_links = {
+      "panda_hand",
+      "panda_leftfinger",
+      "panda_rightfinger"
+  };
+
+
+  if (!arm.attachObject(
+      "pick_box",
+      "panda_hand",
+      touch_links))
+  {
+    RCLCPP_ERROR(
+        node->get_logger(),
+        "Attach failed");
+
+    executor.cancel();
+    executor_thread.join();
+    rclcpp::shutdown();
+
+    return 1;
+  }
+
+
+  std::this_thread::sleep_for(
+      std::chrono::seconds(1));
+
+
+  // ============================================================
+  // STEP 7 : Lift
+  // ============================================================
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "STEP 7 : Lifting object");
+
+
+  geometry_msgs::msg::Pose lift_pose =
+      arm.getCurrentPose().pose;
+
+
+  lift_pose.position.z += 0.12;
+
+
+  waypoints.clear();
+
+  waypoints.push_back(lift_pose);
+
+
+  moveit_msgs::msg::RobotTrajectory lift_trajectory;
+
+
+  fraction =
+      arm.computeCartesianPath(
+          waypoints,
+          0.01,
+          lift_trajectory,
+          true);
+
+
+  if (fraction < 0.95)
+  {
+    RCLCPP_ERROR(
+        node->get_logger(),
+        "Lift path failed");
+
+    executor.cancel();
+    executor_thread.join();
+    rclcpp::shutdown();
+
+    return 1;
+  }
+
+
+  arm.execute(lift_trajectory);
+
+
+  // ============================================================
+  // STEP 8 : Place 위치로 이동
+  // ============================================================
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "STEP 8 : Moving to place position");
+
+
+  geometry_msgs::msg::Pose place_pose =
+      arm.getCurrentPose().pose;
+
+
+  // 물체를 옆으로 이동
+  place_pose.position.x = 0.35;
+  place_pose.position.y = 0.30;
+  place_pose.position.z = 0.30;
+
+
+  arm.setPoseTarget(place_pose);
+
+
+  if (!static_cast<bool>(arm.move()))
+  {
+    RCLCPP_ERROR(
+        node->get_logger(),
+        "Move to place failed");
+
+    executor.cancel();
+    executor_thread.join();
+    rclcpp::shutdown();
+
+    return 1;
+  }
+
+
+  arm.clearPoseTargets();
+
+
+  // ============================================================
+  // STEP 9 : Lower
+  // ============================================================
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "STEP 9 : Lowering object");
+
+
+  geometry_msgs::msg::Pose lower_pose =
+      arm.getCurrentPose().pose;
+
+
+  lower_pose.position.z -= 0.10;
+
+
+  waypoints.clear();
+
+  waypoints.push_back(lower_pose);
+
+
+  moveit_msgs::msg::RobotTrajectory lower_trajectory;
+
+
+  fraction =
+      arm.computeCartesianPath(
+          waypoints,
+          0.01,
+          lower_trajectory,
+          true);
+
+
+  if (fraction < 0.95)
+  {
+    RCLCPP_ERROR(
+        node->get_logger(),
+        "Lower path failed");
+
+    executor.cancel();
+    executor_thread.join();
+    rclcpp::shutdown();
+
+    return 1;
+  }
+
+
+  arm.execute(lower_trajectory);
+
+
+  // ============================================================
+  // STEP 10 : Gripper Open
+  // ============================================================
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "STEP 10 : Opening gripper");
+
+
+  hand.setNamedTarget("open");
+
+  hand.move();
+
+
+  // ============================================================
+  // STEP 11 : Detach
+  // ============================================================
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "STEP 11 : Detaching object");
+
+
+  if (!arm.detachObject("pick_box"))
+  {
+    RCLCPP_ERROR(
+        node->get_logger(),
+        "Detach failed");
+
+    executor.cancel();
+    executor_thread.join();
+    rclcpp::shutdown();
+
+    return 1;
+  }
+
+
+  std::this_thread::sleep_for(
+      std::chrono::seconds(1));
+
+
+  // ============================================================
+  // STEP 12 : Retreat
+  // ============================================================
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "STEP 12 : Retreat");
+
+
+  geometry_msgs::msg::Pose retreat_pose =
+      arm.getCurrentPose().pose;
+
+
+  retreat_pose.position.z += 0.10;
+
+
+  waypoints.clear();
+
+  waypoints.push_back(retreat_pose);
+
+
+  moveit_msgs::msg::RobotTrajectory retreat_trajectory;
+
+
+  fraction =
+      arm.computeCartesianPath(
+          waypoints,
+          0.01,
+          retreat_trajectory,
+          true);
+
+
+  if (fraction >= 0.95)
+  {
+    arm.execute(retreat_trajectory);
+  }
+
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "====================================");
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "PICK AND PLACE COMPLETE");
+
+  RCLCPP_INFO(
+      node->get_logger(),
+      "====================================");
+
+
+  executor.cancel();
+
+  if (executor_thread.joinable())
+  {
+    executor_thread.join();
+  }
+
+
+  rclcpp::shutdown();
+
+  return 0;
+}
+
+```
+| <img width="925" height="380" alt="image" src="https://github.com/user-attachments/assets/061cd28f-16f7-4e17-8450-80c38481d9e3" /> |
+| --- |
+| pick and place 추가 |
+
+| <img width="927" height="208" alt="image" src="https://github.com/user-attachments/assets/5c002cd3-71eb-4e16-beea-dea76b9471f2" /> |
+| --- |
+| CMakeLists 추가 |
+
+
+|  <img width="925" height="340" alt="image" src="https://github.com/user-attachments/assets/17932c4f-c941-4041-bb60-a5e512e48e70" /> |
+| --- |
+| Cmaker에서 install에 추가 |
+
+| <img width="925" height="273" alt="image" src="https://github.com/user-attachments/assets/9baf1af7-5abc-45e4-bf35-3a0adf50713c" /> |
+| --- |
+| 빌드 성공 |
+
+---------------------------------------------
+**결과 정리**
+<img width="1330" height="481" alt="image" src="https://github.com/user-attachments/assets/58cac7ac-6b15-4ef3-be85-93bd8847c11a" />
+> pre-grasp 단계를 실패하였다.
+> pick_and_place.cpp에서 
+
+arm.setPlanningTime(10.0);
+arm.setNumPlanningAttempts(10);
+
+이걸:
+
+arm.setPlanningTime(20.0);
+arm.setNumPlanningAttempts(20);
+
+으로 올려서 Planning attempt 수를 늘림. lanner를 여러 번 새로 계산하도록 설정함.
+
+
+
+
+
+
+
 
 
 ***5. MTC***
