@@ -34,26 +34,26 @@ Planner가 생성한 전체 이동 경로
 Nav2에서 사용 가능한 A* 기반 Planner
 
 -----------------------------------------------------
-## pipeline
-STEP 1  간단한 Differential Drive 로봇 생성
-        ↓
-STEP 2  Gazebo에서 로봇 띄우기
-        ↓
-STEP 3  바퀴 구동 + /cmd_vel
-        ↓
-STEP 4  Odometry / TF 구성
-        ↓
-STEP 5  LiDAR 추가
-        ↓
-STEP 6  Gazebo 장애물 추가
-        ↓
-STEP 7  Nav2 연결
-        ↓
-STEP 8  RViz에서 Goal 지정
-        ↓
-STEP 9  장애물을 피하는 Global Path 생성
-        ↓
-STEP 10 실제 로봇이 경로 따라 이동
+## pipeline     
+STEP 1  간단한 Differential Drive 로봇 생성          
+        ↓             
+STEP 2  Gazebo에서 로봇 띄우기          
+        ↓    
+STEP 3  바퀴 구동 + /cmd_vel   
+        ↓   
+STEP 4  Odometry / TF 구성    
+        ↓    
+STEP 5  LiDAR 추가   
+        ↓   
+STEP 6  Gazebo 장애물 추가     
+        ↓     
+STEP 7  Nav2 연결     
+        ↓     
+STEP 8  RViz에서 Goal 지정      
+        ↓    
+STEP 9  장애물을 피하는 Global Path 생성    
+        ↓    
+STEP 10 실제 로봇이 경로 따라 이동     
 
 ----------------------------------------------------------
 
