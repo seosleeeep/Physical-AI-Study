@@ -7,10 +7,12 @@
 ## 1>이론 학습 — 유한 상태 기계(Finite State Machine, FSM), 마르코프 의사결정 과정(Markov Decision Process, MDP), 태스크 플래닝(Task Planning)의 핵심 개념과 원리를 학습한다.
 
  1. FSM
+ <img width="2275" height="3289" alt="20260826_153851812" src="https://github.com/user-attachments/assets/9948d3d4-abe6-47a4-98f0-28715a87c750" /> 
+ <img width="2214" height="3186" alt="20260826_153900031" src="https://github.com/user-attachments/assets/36680f02-a498-476a-9e53-df3602751e41" />
 
- 2. MDF
+ 4. MDF
 
- 3. Task Planning
+ 5. Task Planning
 
 ----------------------------------------------------------------------------------------------------
 ## 2>Behavior Tree 실습 — Behavior Tree의 구조와 동작 원리를 이해하고, 관련 튜토리얼을 따라 실습한다. 
